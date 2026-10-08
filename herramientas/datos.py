@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """Extrae trabajadores y procedimientos desde index.html y el cruce de RUT."""
-import re, json, html
+import re, json, os
 
-src = open('/home/user/EVALUACIONES-PROCEDIMIENTO-OPERACIONES-PPT/index.html', encoding='utf-8').read()
+_AQUI = os.path.dirname(os.path.abspath(__file__))
+
+src = open(os.path.join(os.path.dirname(_AQUI), 'index.html'), encoding='utf-8').read()
 
 def bloque(marca, largo):
     i = src.index(marca)
@@ -25,10 +27,10 @@ for g, rows in re.findall(r"\{ g:'(G\d)', rows:\[(.*?)\]\s*\}", bloque('RAW_PEOP
 # los borrados del dashboard
 people = [p for p in people if p['id'] not in ('p8', 'p36')]
 
-# --- RUT: 31 de la planilla + 3 cargados aparte ---
-ruts = {r['pid']: (r['cuerpo'] + '-' + r['dado'].upper()) for r in json.load(open('/tmp/cruce.json'))}
-ruts.update({'p0': '15338787-7', 'p9': '13515438-5', 'p19': '15014074-9',
-             'p37': '19353026-5'})
+# --- RUT: guardados junto a este modulo, para no depender de archivos externos ---
+_aqui = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(_aqui, 'ruts.json'), encoding='utf-8') as _fh:
+    ruts = json.load(_fh)
 for p in people:
     p['rut'] = ruts.get(p['id'], 'POR CONFIRMAR')
 
