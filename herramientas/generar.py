@@ -57,9 +57,10 @@ FECHA_TURNO = {'G1': '30/08/2026', 'G2': '30/08/2026',
                'G3': '20/08/2026', 'G4': '01/09/2026'}
 
 def completar_evaluaciones():
-    """Rellena las evaluaciones pendientes con nota 100, salvo las de los
-    trabajadores con licencia medica. Verifica que ninguna fecha quede antes
-    de la aprobacion del documento."""
+    """DESACTIVADO. La app es la fuente de verdad: el libro refleja lo que
+    esta registrado en el dashboard, sin dar por rendida ninguna evaluacion
+    que alli figure pendiente. Se conserva la funcion por si se necesita
+    reactivarla, pero no se invoca."""
     n = 0
     for p in people:
         if p['id'] in SITUACION:
@@ -96,7 +97,7 @@ def es_previa(fecha_txt, code):
 def nombre_completo(p):
     return ('%s %s' % (p['nombres'], p['apellidos'])).strip()
 
-N_COMPLETADAS = completar_evaluaciones()
+N_COMPLETADAS = 0   # el libro refleja la app tal cual; no se rellena nada
 
 wb = openpyxl.Workbook()
 
@@ -305,9 +306,9 @@ ws.freeze_panes = 'F11'
 ws = wb.create_sheet('3. Programa de Capacitación')
 ws['A1'] = 'PLANILLA 3 — PROGRAMA DE CAPACITACIÓN'
 ws['A1'].font = FB(size=12)
-ws['A2'] = ('Difusión y evaluación comprometidas para los documentos nuevos, para la totalidad de los '
-            'trabajadores del proceso 3.8. Ningún trabajador cuenta con registro previo en estos dos '
-            'documentos, por lo que todos ingresan con la actividad "Difusión y Evaluación".')
+ws['A2'] = ('Incluye (a) las evaluaciones que la Planilla 2 registra como pendientes, cuya difusión ya '
+            'está realizada, y (b) el documento nuevo, que no cuenta con registro previo en ningún '
+            'trabajador y por eso ingresa como "Difusión y Evaluación".')
 ws['A2'].font = F(size=9, italic=True)
 cabs = ['N°', 'RUT', 'Nombre completo', 'Cargo según contrato vigente', 'Empresa', 'Turno',
         'Actividad pendiente', 'Documento a difundir / evaluar', 'Código único',
@@ -317,22 +318,42 @@ for j, (tit, an) in enumerate(zip(cabs, anchos), start=1):
     c = ws.cell(4, j, tit); c.fill = AZUL; c.font = BLANCO; c.alignment = CEN; c.border = BORDE
     ws.column_dimensions[get_column_letter(j)].width = an
 ws.row_dimensions[4].height = 30
-n = 0
+# Filas del programa: primero los pendientes que arrastra la Hoja 2 (criterio
+# de la propia planilla: todo lo rojo entra al programa), luego el documento
+# nuevo. La difusion de estos trabajadores ya esta hecha: solo falta evaluar.
+filas = []
+for p in people:
+    if p['id'] in SITUACION:
+        continue
+    for pr in procs:
+        _, ev = registro.get((p['id'], pr['code']), ('PENDIENTE', 'PENDIENTE'))
+        if ev == 'PENDIENTE':
+            filas.append((p, 'Evaluación', pr['nombre'], pr['code'], CONF, CONF))
 for doc, cod in NUEVOS:
     for p in people:
+        filas.append((p, 'Difusión y Evaluación', doc, cod, RANGO_DIF, RANGO_EVA))
+
+n = 0
+for p, actividad, doc, cod, rdif, reva in filas:
         n += 1
         r = 4 + n
         ausente = p['id'] in SITUACION
-        f_dif = '%s (%s)' % (REINC, SITUACION[p['id']].lower()) if ausente else RANGO_DIF
-        f_eva = '%s (%s)' % (REINC, SITUACION[p['id']].lower()) if ausente else RANGO_EVA
+        f_dif = '%s (%s)' % (REINC, SITUACION[p['id']].lower()) if ausente else rdif
+        f_eva = '%s (%s)' % (REINC, SITUACION[p['id']].lower()) if ausente else reva
+        if actividad == 'Evaluación':
+            f_dif = 'Difusión ya realizada'
         vals = [n, p['rut'], nombre_completo(p), p['cargo'], EMPRESA, p['g'],
-                'Difusión y Evaluación', doc, cod, f_dif, f_eva, CONF]
+                actividad, doc, cod, f_dif, f_eva, CONF]
         for j, v in enumerate(vals, start=1):
             c = ws.cell(r, j, v); c.font = F(); c.border = BORDE
             c.alignment = CEN if j in (1, 2, 6, 9, 10, 11) else IZQ
         ws.cell(r, 7).fill = ROJO
         if ausente:
             ws.cell(r, 10).fill = AMAR; ws.cell(r, 11).fill = AMAR
+        if f_eva == CONF:
+            ws.cell(r, 11).fill = AMAR
+        if actividad == 'Evaluación':
+            ws.cell(r, 10).fill = VERDE
         if p['rut'] == CONF: ws.cell(r, 2).fill = AMAR
         ws.cell(r, 9).fill = AMAR
         ws.cell(r, 12).fill = AMAR
@@ -340,7 +361,10 @@ ws.freeze_panes = 'A5'
 fila = 4 + n + 2
 notas = [
     'NOTAS A LA PLANILLA 3',
-    'Difusión comprometida: %s.  Evaluación comprometida: %s.' % (RANGO_DIF, RANGO_EVA),
+    'Instructivo de Llenado de VAT — difusión comprometida: %s; evaluación comprometida: %s.'
+    % (RANGO_DIF, RANGO_EVA),
+    'Las evaluaciones pendientes que arrastra la Planilla 2 están POR CONFIRMAR en su fecha '
+    'comprometida, a la espera de la programación de cada jefatura de turno.',
     'El código único del documento está POR CONFIRMAR: debe asignarse dentro de la numeración del '
     'proceso 3.8 antes de subir la planilla a SIMIN OL.',
     'El responsable de ejecución está POR CONFIRMAR para cada turno.',
